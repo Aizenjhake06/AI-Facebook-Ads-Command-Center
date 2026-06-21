@@ -5,7 +5,8 @@ import { useWorkspace } from '@/providers/WorkspaceProvider'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { LayoutDashboard, Megaphone, ChartBar as BarChart3, Settings, User, LogOut, Menu, X, Building2, ChevronDown, Plus, Users, Sparkles, Activity, TrendingUp, ChartLine as LineChart, Bell, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Megaphone, ChartBar as BarChart3, Settings, User, LogOut, Menu, X, Building2, ChevronDown, Plus, Users, Sparkles, Activity, TrendingUp, ChartLine as LineChart, Bell, MessageSquare, FileText } from 'lucide-react'
+import { NotificationBell } from './NotificationBell'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Recommendations', href: '/recommendations', icon: TrendingUp },
   { name: 'Forecasts', href: '/forecasts', icon: LineChart },
   { name: 'Alerts', href: '/alerts', icon: Bell },
+  { name: 'Reports', href: '/reports', icon: FileText },
   { name: 'AI Assistant', href: '/assistant', icon: MessageSquare },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -209,17 +211,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="lg:pl-64">
-        {/* Top bar for mobile */}
-        <div className="lg:hidden sticky top-0 z-30 bg-slate-800 border-b border-slate-700 px-4 py-3">
+        {/* Top bar */}
+        <div className="sticky top-0 z-30 bg-slate-800/80 backdrop-blur border-b border-slate-700 px-4 lg:px-8 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="text-slate-400 hover:text-white"
+              className="lg:hidden text-slate-400 hover:text-white"
             >
               <Menu className="w-6 h-6" />
             </button>
-            <span className="text-lg font-bold text-white">AdPilot AI</span>
-            <div className="w-6" />
+            <div className="hidden lg:block" />
+            <div className="flex items-center gap-4">
+              <NotificationBell />
+            </div>
           </div>
         </div>
 

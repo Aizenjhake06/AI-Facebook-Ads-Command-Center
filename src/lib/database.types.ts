@@ -257,6 +257,188 @@ export interface Database {
           created_at?: string
         }
       }
+      campaign_reports: {
+        Row: {
+          id: string
+          workspace_id: string
+          user_id: string
+          report_type: string
+          format: string
+          title: string
+          description: string | null
+          filters: Json
+          file_url: string | null
+          file_size: number | null
+          status: string
+          error_message: string | null
+          generated_at: string | null
+          expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          user_id: string
+          report_type: string
+          format: string
+          title: string
+          description?: string | null
+          filters?: Json
+          file_url?: string | null
+          file_size?: number | null
+          status?: string
+          error_message?: string | null
+          generated_at?: string | null
+          expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          user_id?: string
+          report_type?: string
+          format?: string
+          title?: string
+          description?: string | null
+          filters?: Json
+          file_url?: string | null
+          file_size?: number | null
+          status?: string
+          error_message?: string | null
+          generated_at?: string | null
+          expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      shareable_reports: {
+        Row: {
+          id: string
+          report_id: string
+          token: string
+          password_hash: string | null
+          expires_at: string | null
+          access_count: number
+          last_accessed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          token: string
+          password_hash?: string | null
+          expires_at?: string | null
+          access_count?: number
+          last_accessed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          token?: string
+          password_hash?: string | null
+          expires_at?: string | null
+          access_count?: number
+          last_accessed_at?: string | null
+          created_at?: string
+        }
+      }
+      user_notifications: {
+        Row: {
+          id: string
+          user_id: string
+          workspace_id: string | null
+          type: string
+          title: string
+          message: string
+          data: Json | null
+          channel: string
+          read: boolean
+          read_at: string | null
+          email_sent: boolean
+          email_sent_at: string | null
+          delivery_status: string
+          delivery_error: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          workspace_id?: string | null
+          type: string
+          title: string
+          message: string
+          data?: Json | null
+          channel?: string
+          read?: boolean
+          read_at?: string | null
+          email_sent?: boolean
+          email_sent_at?: string | null
+          delivery_status?: string
+          delivery_error?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          workspace_id?: string | null
+          type?: string
+          title?: string
+          message?: string
+          data?: Json | null
+          channel?: string
+          read?: boolean
+          read_at?: string | null
+          email_sent?: boolean
+          email_sent_at?: string | null
+          delivery_status?: string
+          delivery_error?: string | null
+          created_at?: string
+        }
+      }
+      notification_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          email_enabled: boolean
+          alert_email: boolean
+          report_email: boolean
+          campaign_issue_email: boolean
+          digest_frequency: string
+          quiet_hours_start: string | null
+          quiet_hours_end: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email_enabled?: boolean
+          alert_email?: boolean
+          report_email?: boolean
+          campaign_issue_email?: boolean
+          digest_frequency?: string
+          quiet_hours_start?: string | null
+          quiet_hours_end?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email_enabled?: boolean
+          alert_email?: boolean
+          report_email?: boolean
+          campaign_issue_email?: boolean
+          digest_frequency?: string
+          quiet_hours_start?: string | null
+          quiet_hours_end?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
