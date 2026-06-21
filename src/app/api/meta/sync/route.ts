@@ -176,11 +176,25 @@ export async function POST(request: Request) {
           successful: batchResults.filter(r => !(r instanceof Error)).length,
         })
 
-        let batchIndex = 0
+        // Track which batch result corresponds to which entity type
+        let campaignsBatchIndex = -1
+        let adsetsBatchIndex = -1
+        let adsBatchIndex = -1
+        
+        let currentBatchIndex = 0
+        if (!entityType || entityType === 'all' || entityType === 'campaigns') {
+          campaignsBatchIndex = currentBatchIndex++
+        }
+        if (!entityType || entityType === 'all' || entityType === 'adsets') {
+          adsetsBatchIndex = currentBatchIndex++
+        }
+        if (!entityType || entityType === 'all' || entityType === 'ads') {
+          adsBatchIndex = currentBatchIndex++
+        }
 
         // Process campaigns
-        if ((!entityType || entityType === 'all' || entityType === 'campaigns') && batchResults[batchIndex] && !(batchResults[batchIndex] instanceof Error)) {
-          const campaignsData = batchResults[batchIndex] as { data: any[] }
+        if (campaignsBatchIndex >= 0 && batchResults[campaignsBatchIndex] && !(batchResults[campaignsBatchIndex] instanceof Error)) {
+          const campaignsData = batchResults[campaignsBatchIndex] as { data: any[] }
           console.log(`Raw campaigns data for ${account.metaId}:`, {
             hasData: !!campaignsData.data,
             count: campaignsData.data?.length || 0,
@@ -215,12 +229,16 @@ export async function POST(request: Request) {
             processedRecords += campaignsData.data.length
             console.log(`Synced ${campaignsData.data.length} campaigns for ${account.metaId}`)
           }
-          batchIndex++
         }
 
         // Process ad sets
-        if ((!entityType || entityType === 'all' || entityType === 'adsets') && batchResults[batchIndex] && !(batchResults[batchIndex] instanceof Error)) {
-          const adsetsData = batchResults[batchIndex] as { data: any[] }
+        if (adsetsBatchIndex >= 0 && batchResults[adsetsBatchIndex] && !(batchResults[adsetsBatchIndex] instanceof Error)) {
+          const adsetsData = batchResults[adsetsBatchIndex] as { data: any[] }
+          console.log(`Raw adsets data for ${account.metaId}:`, {
+            hasData: !!adsetsData.data,
+            count: adsetsData.data?.length || 0,
+          })
+          
           if (adsetsData.data && adsetsData.data.length > 0) {
             // First, we need to map campaign_id (Meta ID) to campaign UUID
             const campaignMetaIds = [...new Set(adsetsData.data.map(a => a.campaign_id).filter(Boolean))]
@@ -265,13 +283,19 @@ export async function POST(request: Request) {
               processedRecords += adsetsToUpsert.length
               console.log(`Synced ${adsetsToUpsert.length} ad sets for ${account.metaId}`)
             }
+          } else {
+            console.log(`No adsets data for ${account.metaId}`)
           }
-          batchIndex++
         }
 
         // Process ads
-        if ((!entityType || entityType === 'all' || entityType === 'ads') && batchResults[batchIndex] && !(batchResults[batchIndex] instanceof Error)) {
-          const adsData = batchResults[batchIndex] as { data: any[] }
+        if (adsBatchIndex >= 0 && batchResults[adsBatchIndex] && !(batchResults[adsBatchIndex] instanceof Error)) {
+          const adsData = batchResults[adsBatchIndex] as { data: any[] }
+          console.log(`Raw ads data for ${account.metaId}:`, {
+            hasData: !!adsData.data,
+            count: adsData.data?.length || 0,
+          })
+          
           if (adsData.data && adsData.data.length > 0) {
             // Map campaign_id and adset_id to UUIDs
             const campaignMetaIds = [...new Set(adsData.data.map(a => a.campaign_id).filter(Boolean))]
@@ -320,8 +344,9 @@ export async function POST(request: Request) {
               processedRecords += adsToUpsert.length
               console.log(`Synced ${adsToUpsert.length} ads for ${account.metaId}`)
             }
+          } else {
+            console.log(`No ads data for ${account.metaId}`)
           }
-          batchIndex++
         }
       } catch (accountError: any) {
         console.error(`Error syncing account ${account.metaId}:`, accountError.message)
