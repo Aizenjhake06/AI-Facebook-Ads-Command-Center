@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, Loader2 } from 'lucide-react'
+import { Building2, Loader as Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function NewWorkspacePage() {

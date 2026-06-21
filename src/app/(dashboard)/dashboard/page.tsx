@@ -4,17 +4,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
 import Link from 'next/link'
 import { useState } from 'react'
-import {
-  Megaphone,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Users,
-  BarChart3,
-  Building2,
-  Plus,
-  ArrowRight,
-} from 'lucide-react'
+import { Megaphone, DollarSign, TrendingUp, TrendingDown, Users, ChartBar as BarChart3, Building2, Plus, ArrowRight } from 'lucide-react'
 
 export default function DashboardPage() {
   const { profile } = useAuth()

@@ -1,6 +1,6 @@
 'use client'
 
-import { BarChart3, TrendingUp } from 'lucide-react'
+import { ChartBar as BarChart3, TrendingUp } from 'lucide-react'
 
 export default function AnalyticsPage() {
   return (

@@ -1,6 +1,6 @@
 'use client'
 
-import { Megaphone, BarChart3 } from 'lucide-react'
+import { Megaphone, ChartBar as BarChart3 } from 'lucide-react'
 
 export default function CampaignsPage() {
   return (

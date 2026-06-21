@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/providers/AuthProvider'
-import { User, Mail, Camera, Save, Loader2 } from 'lucide-react'
+import { User, Mail, Camera, Save, Loader as Loader2 } from 'lucide-react'
 
 export default function ProfilePage() {
   const { profile, user, refreshProfile } = useAuth()

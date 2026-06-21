@@ -5,20 +5,7 @@ import { useWorkspace } from '@/providers/WorkspaceProvider'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import {
-  LayoutDashboard,
-  Megaphone,
-  BarChart3,
-  Settings,
-  User,
-  LogOut,
-  Menu,
-  X,
-  Building2,
-  ChevronDown,
-  Plus,
-  Users,
-} from 'lucide-react'
+import { LayoutDashboard, Megaphone, ChartBar as BarChart3, Settings, User, LogOut, Menu, X, Building2, ChevronDown, Plus, Users } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },

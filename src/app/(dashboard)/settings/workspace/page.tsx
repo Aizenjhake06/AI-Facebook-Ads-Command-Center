@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
-import { Building2, Users, Loader2, Plus, Trash2, Shield, User, MoreVertical, Crown } from 'lucide-react'
+import { Building2, Users, Loader as Loader2, Plus, Trash2, Shield, User, MoveVertical as MoreVertical, Crown } from 'lucide-react'
 import Link from 'next/link'
 
 type MemberWithProfile = {
