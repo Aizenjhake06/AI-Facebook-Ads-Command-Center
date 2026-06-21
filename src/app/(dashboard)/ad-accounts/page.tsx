@@ -2,20 +2,45 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useWorkspace } from '@/providers/WorkspaceProvider'
-import { useAuth } from '@/providers/AuthProvider'
-import { Building2, Plus, Link2, Unlink, RefreshCw, Check, TriangleAlert as AlertTriangle, Loader as Loader2, ExternalLink, Users, Wallet, Shield, Crown } from 'lucide-react'
-import type { MetaConnection, MetaBusinessManager, MetaAdAccount } from '@/lib/meta/types'
-import { REQUIRED_SCOPES, SCOPE_DESCRIPTIONS } from '@/lib/meta/types'
+import { Building2, Plus, Link2, Unlink, RefreshCw, Check, TriangleAlert as AlertTriangle, Loader as Loader2, Users, Wallet, Shield, Megaphone, Layers, FileText, Calendar, Clock, Play, Pause, ChartBar as BarChart3 } from 'lucide-react'
+import type { MetaConnection } from '@/lib/meta/types'
+
+type SyncLog = {
+  id: string
+  meta_connection_id: string
+  ad_account_id: string | null
+  sync_type: 'full' | 'incremental' | 'manual' | 'scheduled'
+  entity_type: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'partial'
+  total_records: number
+  processed_records: number
+  failed_records: number
+  started_at: string | null
+  completed_at: string | null
+  duration_seconds: number | null
+  error_message: string | null
+  rate_limit_remaining: number | null
+  created_at: string
+}
+
+type SyncState = {
+  entity_type: string
+  last_sync_at: string | null
+  last_successful_sync_at: string | null
+  error_count: number
+}
 
 export default function AdAccountsPage() {
   const { currentWorkspace, membership } = useWorkspace()
-  const { user } = useAuth()
   const [connections, setConnections] = useState<MetaConnection[]>([])
   const [loading, setLoading] = useState(true)
-  const [connecting, setConnecting] = useState(false)
-  const [syncingConnection, setSyncingConnection] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showOAuthPopup, setShowOAuthPopup] = useState(false)
+  const [selectedConnection, setSelectedConnection] = useState<string | null>(null)
+  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
+  const [syncStates, setSyncStates] = useState<SyncState[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+  const [showSyncDetails, setShowSyncDetails] = useState(false)
 
   const canManage = membership?.role === 'owner' || membership?.role === 'admin'
 
@@ -23,7 +48,7 @@ export default function AdAccountsPage() {
     if (!currentWorkspace) return
 
     try {
-      const response = await fetch(`/api/meta/connections?workspace_id=${currentWorkspace.id}`)
+      const response = await fetch(`/api/meta/status?workspace_id=${currentWorkspace.id}`)
       const data = await response.json()
 
       if (response.ok) {
@@ -42,84 +67,56 @@ export default function AdAccountsPage() {
     fetchConnections()
   }, [fetchConnections])
 
-  const handleConnectMeta = async () => {
-    if (!currentWorkspace || !user) return
+  const fetchSyncLogs = async (connectionId: string) => {
+    setLoadingLogs(true)
+    try {
+      const response = await fetch(`/api/meta/sync/logs?connection_id=${connectionId}`)
+      const data = await response.json()
 
+      if (response.ok) {
+        setSyncLogs(data.logs || [])
+        setSyncStates(data.syncState || [])
+      }
+    } catch (e) {
+      console.error('Failed to fetch sync logs:', e)
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
+  const handleSync = async (connectionId: string, entityType: 'all' | 'campaigns' | 'adsets' | 'ads' | 'insights' = 'all') => {
+    if (!currentWorkspace) return
+
+    setSyncing(connectionId)
     setError(null)
-    setConnecting(true)
 
     try {
-      // Get OAuth URL
-      const response = await fetch('/api/meta/connect')
+      const response = await fetch('/api/meta/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionId,
+          entityType,
+          syncType: 'manual',
+          daysBack: 30
+        })
+      })
+
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to get OAuth URL')
+        throw new Error(data.error || 'Sync failed')
       }
 
-      // Open OAuth popup
-      const width = 600
-      const height = 700
-      const left = window.screenX + (window.outerWidth - width) / 2
-      const top = window.screenY + (window.outerHeight - height) / 2
-
-      const popup = window.open(
-        data.authUrl,
-        'MetaOAuth',
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
-      )
-
-      // Listen for OAuth callback
-      const handleMessage = async (event: MessageEvent) => {
-        if (event.origin !== window.location.origin) return
-
-        if (event.data.type === 'META_OAUTH_SUCCESS') {
-          popup?.close()
-          window.removeEventListener('message', handleMessage)
-
-          // Exchange code for tokens
-          const callbackResponse = await fetch('/api/meta/callback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              code: event.data.code,
-              state: event.data.state,
-              workspace_id: currentWorkspace.id
-            })
-          })
-
-          const callbackData = await callbackResponse.json()
-
-          if (!callbackResponse.ok) {
-            throw new Error(callbackData.error || 'Failed to connect account')
-          }
-
-          await fetchConnections()
-          setConnecting(false)
-        }
-
-        if (event.data.type === 'META_OAUTH_ERROR') {
-          popup?.close()
-          window.removeEventListener('message', handleMessage)
-          setError(event.data.error || 'Authentication failed')
-          setConnecting(false)
-        }
+      // Refresh data
+      await fetchConnections()
+      if (selectedConnection === connectionId) {
+        await fetchSyncLogs(connectionId)
       }
-
-      window.addEventListener('message', handleMessage)
-
-      // Check if popup was closed without completing
-      const checkClosed = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(checkClosed)
-          window.removeEventListener('message', handleMessage)
-          setConnecting(false)
-        }
-      }, 1000)
-
     } catch (e: any) {
-      setError(e.message || 'Failed to connect Meta account')
-      setConnecting(false)
+      setError(`Sync failed: ${e.message}`)
+    } finally {
+      setSyncing(null)
     }
   }
 
@@ -131,19 +128,13 @@ export default function AdAccountsPage() {
         method: 'DELETE'
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to disconnect')
-      }
+      if (!response.ok) throw new Error('Failed to disconnect')
 
       await fetchConnections()
+      setSelectedConnection(null)
     } catch (e) {
       setError('Failed to disconnect account')
     }
-  }
-
-  const handleReconnect = async (connectionId: string) => {
-    // Reconnect is essentially the same as connecting
-    await handleConnectMeta()
   }
 
   const getConnectionStatus = (connection: MetaConnection) => {
@@ -161,39 +152,45 @@ export default function AdAccountsPage() {
     }
   }
 
-  const hasRequiredScopes = (connection: MetaConnection) => {
-    if (!connection.granted_scopes) return false
-    return REQUIRED_SCOPES.every(scope => connection.granted_scopes!.includes(scope))
+  const getSyncLogStatus = (log: SyncLog) => {
+    switch (log.status) {
+      case 'completed':
+        return { label: 'Completed', color: 'text-green-400', icon: Check }
+      case 'running':
+        return { label: 'Running', color: 'text-blue-400', icon: Loader2 }
+      case 'failed':
+        return { label: 'Failed', color: 'text-red-400', icon: AlertTriangle }
+      case 'partial':
+        return { label: 'Partial', color: 'text-yellow-400', icon: AlertTriangle }
+      default:
+        return { label: 'Pending', color: 'text-slate-400', icon: Clock }
+    }
+  }
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return 'N/A'
+    if (seconds < 60) return `${seconds}s`
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}m ${secs}s`
+  }
+
+  const getLastSyncFor = (entityType: string) => {
+    const state = syncStates.find(s => s.entity_type === entityType)
+    return state?.last_successful_sync_at
+      ? new Date(state.last_successful_sync_at).toLocaleString()
+      : 'Never'
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Meta Ad Accounts</h1>
           <p className="text-slate-400 mt-1">
-            Connect and manage your Facebook ad accounts.
+            Connect and sync your Facebook ad accounts.
           </p>
         </div>
-        {canManage && connections.length > 0 && (
-          <button
-            onClick={handleConnectMeta}
-            disabled={connecting}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-medium px-4 py-2.5 rounded-lg transition-all"
-          >
-            {connecting ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Connecting...
-              </>
-            ) : (
-              <>
-                <Plus className="w-5 h-5" />
-                Add Account
-              </>
-            )}
-          </button>
-        )}
       </div>
 
       {error && (
@@ -213,216 +210,234 @@ export default function AdAccountsPage() {
           </div>
           <h2 className="text-xl font-bold text-white mb-2">No Meta accounts connected</h2>
           <p className="text-slate-400 mb-6 max-w-md mx-auto">
-            Connect your Facebook Business Manager to start syncing your ad accounts and campaigns.
-          </p>
-
-          <div className="bg-slate-900/50 rounded-lg p-4 mb-6 max-w-md mx-auto">
-            <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2 justify-center">
-              <Shield className="w-4 h-4" />
-              Required Permissions
-            </h3>
-            <div className="space-y-2 text-left">
-              {REQUIRED_SCOPES.map(scope => (
-                <div key={scope} className="flex items-center gap-2 text-sm text-slate-300">
-                  <Check className="w-4 h-4 text-green-400" />
-                  {SCOPE_DESCRIPTIONS[scope] || scope}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {canManage ? (
-            <button
-              onClick={handleConnectMeta}
-              disabled={connecting}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-medium px-6 py-3 rounded-lg transition-all"
-            >
-              {connecting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <Link2 className="w-5 h-5" />
-                  Connect Meta Account
-                </>
-              )}
-            </button>
-          ) : (
-            <p className="text-slate-500 text-sm">
-              Only workspace admins can connect Meta accounts.
-            </p>
-          )}
-
-          <p className="text-xs text-slate-500 mt-4">
-            You&apos;ll be redirected to Facebook to authorize access.
+            Connect your Facebook Business Manager from the workspace settings to start syncing ad data.
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {connections.map(connection => {
-            const status = getConnectionStatus(connection)
-            const hasAllScopes = hasRequiredScopes(connection)
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Connections list */}
+          <div className="lg:col-span-1 space-y-4">
+            <h2 className="text-lg font-medium text-white">Connected Accounts</h2>
+            {connections.map((connection: any) => {
+              const status = getConnectionStatus(connection)
+              const isSelected = selectedConnection === connection.id
+              const stats = connection.stats || { campaigns: 0, adsets: 0, ads: 0 }
 
-            return (
-              <div
-                key={connection.id}
-                className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden"
-              >
-                {/* Connection Header */}
-                <div className="p-5 flex items-center justify-between border-b border-slate-700">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center overflow-hidden">
+              return (
+                <div
+                  key={connection.id}
+                  className={`bg-slate-800/50 border rounded-xl p-4 cursor-pointer transition-all ${
+                    isSelected ? 'border-blue-500 bg-slate-800' : 'border-slate-700 hover:border-slate-600'
+                  }`}
+                  onClick={() => {
+                    setSelectedConnection(connection.id)
+                    fetchSyncLogs(connection.id)
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-slate-700 rounded-full overflow-hidden">
                       {connection.facebook_user_picture_url ? (
                         <img
                           src={connection.facebook_user_picture_url}
-                          alt={connection.facebook_user_name || 'User'}
+                          alt={connection.facebook_user_name}
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <Users className="w-6 h-6 text-slate-500" />
+                        <Users className="w-5 h-5 text-slate-500 m-auto mt-2.5" />
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-medium text-white">
-                          {connection.facebook_user_name || 'Facebook User'}
-                        </h3>
-                        <span className={`text-xs px-2 py-0.5 rounded ${status.color}`}>
-                          {status.label}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-400">
-                        {connection.facebook_user_email || connection.facebook_user_id}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium truncate">
+                        {connection.facebook_user_name}
                       </p>
+                      <span className={`text-xs px-2 py-0.5 rounded ${status.color}`}>
+                        {status.label}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {!hasAllScopes && (
-                      <span className="flex items-center gap-1 text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded">
-                        <AlertTriangle className="w-3 h-3" />
-                        Missing permissions
-                      </span>
-                    )}
-                    {canManage && (
-                      <>
-                        <button
-                          onClick={() => handleReconnect(connection.id)}
-                          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                          title="Reconnect"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDisconnect(connection.id, connection.facebook_user_name || 'account')}
-                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
-                          title="Disconnect"
-                        >
-                          <Unlink className="w-4 h-4" />
-                        </button>
-                      </>
-                    )}
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="bg-slate-900/50 rounded p-2">
+                      <Megaphone className="w-4 h-4 text-blue-400 mx-auto mb-1" />
+                      <p className="text-white font-medium">{stats.campaigns}</p>
+                      <p className="text-slate-500">Campaigns</p>
+                    </div>
+                    <div className="bg-slate-900/50 rounded p-2">
+                      <Layers className="w-4 h-4 text-green-400 mx-auto mb-1" />
+                      <p className="text-white font-medium">{stats.adsets}</p>
+                      <p className="text-slate-500">Ad Sets</p>
+                    </div>
+                    <div className="bg-slate-900/50 rounded p-2">
+                      <FileText className="w-4 h-4 text-purple-400 mx-auto mb-1" />
+                      <p className="text-white font-medium">{stats.ads}</p>
+                      <p className="text-slate-500">Ads</p>
+                    </div>
                   </div>
                 </div>
+              )
+            })}
+          </div>
 
-                {/* Business Managers & Ad Accounts */}
-                {(connection as any).business_managers?.length > 0 && (
-                  <div className="p-5">
-                    <h4 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2">
-                      <Building2 className="w-4 h-4" />
-                      Business Managers & Ad Accounts
-                    </h4>
-                    <div className="space-y-3">
-                      {(connection as any).business_managers.map((bm: MetaBusinessManager & { ad_accounts: MetaAdAccount[] }) => (
-                        <div key={bm.id} className="bg-slate-900/50 rounded-lg p-4">
-                          <div className="flex items-center gap-3 mb-3">
-                            {bm.profile_picture_url ? (
-                              <img
-                                src={bm.profile_picture_url}
-                                alt={bm.name}
-                                className="w-8 h-8 rounded"
-                              />
-                            ) : (
-                              <div className="w-8 h-8 bg-slate-700 rounded flex items-center justify-center">
-                                <Building2 className="w-4 h-4 text-slate-500" />
-                              </div>
-                            )}
-                            <span className="font-medium text-white">{bm.name}</span>
-                            <span className="text-xs text-slate-500">ID: {bm.business_manager_id}</span>
-                          </div>
+          {/* Sync management */}
+          <div className="lg:col-span-2">
+            {selectedConnection ? (
+              <div className="space-y-6">
+                {/* Sync controls */}
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                  <h2 className="text-lg font-medium text-white mb-4">Sync Data</h2>
 
-                          {bm.ad_accounts?.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {bm.ad_accounts.map((account) => (
-                                <div
-                                  key={account.id}
-                                  className="flex items-center justify-between bg-slate-800 rounded-lg p-3"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <Wallet className="w-4 h-4 text-slate-500" />
-                                    <div>
-                                      <p className="text-sm text-white">{account.name}</p>
-                                      <p className="text-xs text-slate-500">
-                                        {account.ad_account_id} • {account.currency}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-sm text-white">
-                                      {new Intl.NumberFormat('en-US', {
-                                        style: 'currency',
-                                        currency: account.currency
-                                      }).format(account.amount_spent)}
-                                    </p>
-                                    <p className="text-xs text-slate-500">Spent</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <button
+                      onClick={() => handleSync(selectedConnection, 'campaigns')}
+                      disabled={syncing === selectedConnection}
+                      className="flex items-center justify-center gap-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-white px-4 py-3 rounded-lg transition-all disabled:opacity-50"
+                    >
+                      <Megaphone className="w-4 h-4" />
+                      Campaigns
+                    </button>
+                    <button
+                      onClick={() => handleSync(selectedConnection, 'adsets')}
+                      disabled={syncing === selectedConnection}
+                      className="flex items-center justify-center gap-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-white px-4 py-3 rounded-lg transition-all disabled:opacity-50"
+                    >
+                      <Layers className="w-4 h-4" />
+                      Ad Sets
+                    </button>
+                    <button
+                      onClick={() => handleSync(selectedConnection, 'insights')}
+                      disabled={syncing === selectedConnection}
+                      className="flex items-center justify-center gap-2 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-white px-4 py-3 rounded-lg transition-all disabled:opacity-50"
+                    >
+                      <BarChart3 className="w-4 h-4" />
+                      Insights
+                    </button>
+                    <button
+                      onClick={() => handleSync(selectedConnection, 'all')}
+                      disabled={syncing === selectedConnection}
+                      className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-lg transition-all disabled:opacity-50"
+                    >
+                      {syncing === selectedConnection ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4" />
+                          Sync All
+                        </>
+                      )}
+                    </button>
+                  </div>
 
-                          {(!bm.ad_accounts || bm.ad_accounts.length === 0) && (
-                            <p className="text-sm text-slate-500">No ad accounts found</p>
-                          )}
-                        </div>
-                      ))}
+                  <p className="text-sm text-slate-400">
+                    Sync pulls the latest data from Meta. Last full sync: {getLastSyncFor('all')}
+                  </p>
+                </div>
+
+                {/* Sync history */}
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                  <h2 className="text-lg font-medium text-white mb-4">Sync History</h2>
+
+                  {loadingLogs ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-slate-500" />
                     </div>
-                  </div>
-                )}
+                  ) : syncLogs.length === 0 ? (
+                    <p className="text-slate-500 text-center py-8">No sync history yet</p>
+                  ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {syncLogs.map(log => {
+                        const status = getSyncLogStatus(log)
+                        const StatusIcon = status.icon
+                        return (
+                          <div key={log.id} className="bg-slate-900/50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <StatusIcon className={`w-4 h-4 ${status.color} ${log.status === 'running' ? 'animate-spin' : ''}`} />
+                                <span className="text-white capitalize">{log.sync_type}</span>
+                                <span className="text-slate-500">•</span>
+                                <span className="text-slate-300">{log.entity_type}</span>
+                              </div>
+                              <span className="text-sm text-slate-400">
+                                {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
+                              </span>
+                            </div>
 
-                {connection.last_error_message && (
-                  <div className="px-5 py-3 bg-red-500/10 border-t border-red-500/20">
-                    <p className="text-sm text-red-400">
-                      <strong>Error:</strong> {connection.last_error_message}
-                    </p>
-                  </div>
+                            <div className="flex items-center gap-4 text-sm text-slate-400">
+                              <span>{log.processed_records} records</span>
+                              {!log.failed_records && log.failed_records > 0 && (
+                                <span className="text-red-400">{log.failed_records} failed</span>
+                              )}
+                              {log.duration_seconds && (
+                                <span>{formatDuration(log.duration_seconds)}</span>
+                              )}
+                            </div>
+
+                            {log.error_message && (
+                              <p className="text-sm text-red-400 mt-2">{log.error_message}</p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Ad Accounts */}
+                {(() => {
+                  const conn = connections.find((c: any) => c.id === selectedConnection) as any
+                  return conn?.ad_accounts?.length > 0 && (
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+                      <h2 className="text-lg font-medium text-white mb-4">Ad Accounts</h2>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {conn.ad_accounts.map((account: any) => (
+                          <div key={account.id} className="bg-slate-900/50 rounded-lg p-4">
+                            <div className="flex items-center gap-3 mb-2">
+                              <Wallet className="w-5 h-5 text-slate-500" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-white truncate">{account.name}</p>
+                                <p className="text-xs text-slate-500">{account.ad_account_id}</p>
+                              </div>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-400">
+                                Spent: {new Intl.NumberFormat('en-US', {
+                                  style: 'currency',
+                                  currency: account.currency || 'USD'
+                                }).format(account.amount_spent || 0)}
+                              </span>
+                              <span className={account.account_status === 1 ? 'text-green-400' : 'text-yellow-400'}>
+                                {account.account_status === 1 ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Disconnect button */}
+                {canManage && (
+                  <button
+                    onClick={() => {
+                      const conn = connections.find((c: any) => c.id === selectedConnection) as any
+                      if (conn) handleDisconnect(conn.id, conn.facebook_user_name)
+                    }}
+                    className="text-red-400 hover:text-red-300 text-sm flex items-center gap-2"
+                  >
+                    <Unlink className="w-4 h-4" />
+                    Disconnect this account
+                  </button>
                 )}
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Info panel */}
-      {connections.length > 0 && (
-        <div className="mt-8 bg-slate-800/30 border border-slate-700 rounded-xl p-5">
-          <h3 className="text-sm font-medium text-white mb-3">About Meta Connections</h3>
-          <ul className="space-y-2 text-sm text-slate-400">
-            <li className="flex items-start gap-2">
-              <Shield className="w-4 h-4 text-slate-500 mt-0.5" />
-              <span>Access tokens are encrypted and stored securely</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <RefreshCw className="w-4 h-4 text-slate-500 mt-0.5" />
-              <span>Tokens are automatically refreshed before expiration</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <Unlink className="w-4 h-4 text-slate-500 mt-0.5" />
-              <span>You can disconnect accounts anytime from this page</span>
-            </li>
-          </ul>
+            ) : (
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 text-center">
+                <p className="text-slate-400">Select a connection to manage sync settings</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
