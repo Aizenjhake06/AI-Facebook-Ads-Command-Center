@@ -87,6 +87,100 @@ export interface Database {
           joined_at?: string
         }
       }
+      campaign_recommendations: {
+        Row: {
+          id: string
+          campaign_id: string
+          workspace_id: string
+          action_type: string
+          confidence_score: number
+          reasoning: string
+          current_metrics: Json
+          suggested_value: Json | null
+          status: string
+          applied_at: string | null
+          dismissed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          workspace_id: string
+          action_type: string
+          confidence_score: number
+          reasoning: string
+          current_metrics?: Json
+          suggested_value?: Json | null
+          status?: string
+          applied_at?: string | null
+          dismissed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          campaign_id?: string
+          workspace_id?: string
+          action_type?: string
+          confidence_score?: number
+          reasoning?: string
+          current_metrics?: Json
+          suggested_value?: Json | null
+          status?: string
+          applied_at?: string | null
+          dismissed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      campaign_forecasts: {
+        Row: {
+          id: string
+          campaign_id: string | null
+          workspace_id: string
+          forecast_type: string
+          forecast_period_days: number
+          predicted_value: number
+          confidence_lower: number | null
+          confidence_upper: number | null
+          confidence_level: number
+          historical_data_points: number
+          model_version: string
+          generated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          campaign_id?: string | null
+          workspace_id: string
+          forecast_type: string
+          forecast_period_days: number
+          predicted_value: number
+          confidence_lower?: number | null
+          confidence_upper?: number | null
+          confidence_level?: number
+          historical_data_points?: number
+          model_version?: string
+          generated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          campaign_id?: string | null
+          workspace_id?: string
+          forecast_type?: string
+          forecast_period_days?: number
+          predicted_value?: number
+          confidence_lower?: number | null
+          confidence_upper?: number | null
+          confidence_level?: number
+          historical_data_points?: number
+          model_version?: string
+          generated_at?: string
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
