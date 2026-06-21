@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { Loader2, Check, AlertTriangle } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
-export default function MetaCallbackPage() {
+function CallbackContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing')
   
@@ -91,3 +91,18 @@ export default function MetaCallbackPage() {
     </div>
   )
 }
+
+export default function MetaCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+      </div>
+    }>
+      <CallbackContent />
+    </Suspense>
+  )
+}
+
+// Force this page to be dynamic (not pre-rendered)
+export const dynamic = 'force-dynamic'
