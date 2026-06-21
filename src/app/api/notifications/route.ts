@@ -1,5 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import {
+  createNotificationSchema,
+  notificationActionSchema,
+  validateBody,
+  formatZodError,
+  sanitizeString
+} from '@/lib/validation'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -11,7 +18,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') || 'all'
-  const limit = parseInt(searchParams.get('limit') || '50')
+  const limitParam = searchParams.get('limit') || '50'
+  const limit = Math.min(Math.max(1, parseInt(limitParam) || 50), 100)
 
   let query = supabase
     .from('user_notifications')
@@ -52,11 +60,18 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { workspace_id, type, title, message, data, channel } = body
+  const validation = validateBody(createNotificationSchema, body)
 
-  if (!type || !title || !message) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: formatZodError(validation.error) },
+      { status: 400 }
+    )
   }
+
+  const { workspace_id, type, title, message, data, channel } = validation.data
+  const sanitizedTitle = sanitizeString(title)
+  const sanitizedMessage = sanitizeString(message)
 
   const { data: notification, error } = await supabase
     .from('user_notifications')
@@ -64,10 +79,10 @@ export async function POST(request: Request) {
       user_id: user.id,
       workspace_id,
       type,
-      title,
-      message,
+      title: sanitizedTitle,
+      message: sanitizedMessage,
       data,
-      channel: channel || 'in_app',
+      channel,
     })
     .select()
     .single()
@@ -88,13 +103,18 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json()
-  const { action, ids } = body
+  const validation = validateBody(notificationActionSchema, body)
 
-  if (!action || !ids || !Array.isArray(ids)) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: formatZodError(validation.error) },
+      { status: 400 }
+    )
   }
 
-  if (action === 'mark_read') {
+  const { action, ids } = validation.data
+
+  if (action === 'mark_read' && ids && ids.length > 0) {
     const { error } = await supabase
       .from('user_notifications')
       .update({ read: true, read_at: new Date().toISOString() })
@@ -114,7 +134,7 @@ export async function PATCH(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
-  } else if (action === 'delete') {
+  } else if (action === 'delete' && ids && ids.length > 0) {
     const { error } = await supabase
       .from('user_notifications')
       .delete()

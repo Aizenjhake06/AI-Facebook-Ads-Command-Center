@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { updateAlertSchema, validateBody, formatZodError } from '@/lib/validation'
+import { updateAlertSchema, validateBody, formatZodError, generateAlertsSchema, uuidSchema } from '@/lib/validation'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -19,13 +19,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'workspace_id is required' }, { status: 400 })
   }
 
+  const uuidValidation = uuidSchema.safeParse(workspaceId)
+  if (!uuidValidation.success) {
+    return NextResponse.json({ error: 'Invalid workspace_id format' }, { status: 400 })
+  }
+
   let query = supabase
     .from('campaign_alerts')
     .select('*, campaign:meta_campaigns(name)')
     .eq('workspace_id', workspaceId)
 
-  if (status) query = query.eq('status', status)
-  if (severity) query = query.eq('severity', severity)
+  if (status && ['active', 'resolved', 'dismissed'].includes(status)) {
+    query = query.eq('status', status)
+  }
+  if (severity && ['critical', 'warning', 'info'].includes(severity)) {
+    query = query.eq('severity', severity)
+  }
 
   query = query.order('created_at', { ascending: false })
 
@@ -47,11 +56,16 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { workspace_id, campaign_ids, date_range } = body
+  const validation = validateBody(generateAlertsSchema, body)
 
-  if (!workspace_id) {
-    return NextResponse.json({ error: 'workspace_id is required' }, { status: 400 })
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: formatZodError(validation.error) },
+      { status: 400 }
+    )
   }
+
+  const { workspace_id, campaign_ids, date_range } = validation.data
 
   // Get connections
   const { data: connections } = await supabase

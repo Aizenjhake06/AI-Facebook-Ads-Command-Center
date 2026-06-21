@@ -49,7 +49,7 @@ export const createSavedViewSchema = z.object({
   name: z.string().min(1).max(100),
   view_type: z.enum(['campaigns', 'adsets', 'ads', 'analytics']),
   columns: z.array(z.string()).optional(),
-  filters: z.record(z.unknown()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
   sort_by: z.string().optional(),
   sort_order: z.enum(['asc', 'desc']).optional(),
 })
@@ -57,7 +57,7 @@ export const createSavedViewSchema = z.object({
 export const updateSavedViewSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   columns: z.array(z.string()).optional(),
-  filters: z.record(z.unknown()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
   sort_by: z.string().optional(),
   sort_order: z.enum(['asc', 'desc']).optional(),
 })
@@ -66,11 +66,12 @@ export const updateSavedViewSchema = z.object({
 // Report Schemas
 // ============================================
 export const createReportSchema = z.object({
+  workspace_id: uuidSchema,
   report_type: z.enum(['campaign_summary', 'performance', 'insights', 'health', 'recommendations', 'forecasts', 'alerts']),
   format: z.enum(['csv', 'excel', 'pdf']),
   title: z.string().min(1).max(200),
   description: z.string().max(500).optional(),
-  filters: z.record(z.unknown()).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
   date_range_start: z.string().datetime().optional(),
   date_range_end: z.string().datetime().optional(),
 })
@@ -146,6 +147,91 @@ export const searchSchema = z.object({
 })
 
 // ============================================
+// Chat Schemas
+// ============================================
+export const chatRequestSchema = z.object({
+  query: z.string().min(1).max(2000),
+  workspace_id: uuidSchema,
+})
+
+// ============================================
+// View Schemas
+// ============================================
+export const createViewRequestSchema = z.object({
+  workspace_id: uuidSchema,
+  name: z.string().min(1).max(100),
+  view_type: z.enum(['campaigns', 'adsets', 'ads', 'analytics']).default('campaigns'),
+  columns: z.array(z.string()).default(['name', 'status', 'budget', 'spent', 'impressions', 'clicks', 'ctr', 'cpc', 'conversions']),
+  filters: z.record(z.string(), z.unknown()).default({}),
+  sort_by: z.string().default('name'),
+  sort_order: z.enum(['asc', 'desc']).default('asc'),
+  is_default: z.boolean().default(false),
+})
+
+// ============================================
+// Notification Schemas
+// ============================================
+export const createNotificationSchema = z.object({
+  workspace_id: uuidSchema.optional(),
+  type: z.enum(['alert', 'report_ready', 'campaign_issue', 'system']),
+  title: z.string().min(1).max(200),
+  message: z.string().min(1).max(1000),
+  data: z.record(z.string(), z.unknown()).optional(),
+  channel: z.enum(['in_app', 'email', 'both']).default('in_app'),
+})
+
+export const notificationActionSchema = z.object({
+  action: z.enum(['mark_read', 'mark_all_read', 'delete']),
+  ids: z.array(uuidSchema).optional(),
+})
+
+// ============================================
+// Alert Generation Schemas
+// ============================================
+export const generateAlertsSchema = z.object({
+  workspace_id: uuidSchema,
+  campaign_ids: z.array(uuidSchema).optional(),
+  date_range: z.number().int().min(1).max(90).default(7),
+})
+
+// ============================================
+// Input Sanitization
+// ============================================
+export function sanitizeString(input: string): string {
+  if (typeof input !== 'string') {
+    return ''
+  }
+  return input
+    .replace(/[<>]/g, '') // Remove potential XSS chars
+    .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+    .trim()
+}
+
+export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+  const sanitized: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'string') {
+      sanitized[key] = sanitizeString(value)
+    } else if (Array.isArray(value)) {
+      sanitized[key] = value.map(v => typeof v === 'string' ? sanitizeString(v) : v)
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitizeObject(value as Record<string, unknown>)
+    } else {
+      sanitized[key] = value
+    }
+  }
+  return sanitized as T
+}
+
+export function validateWorkspaceId(workspaceId: string): string | null {
+  const result = uuidSchema.safeParse(workspaceId)
+  if (!result.success) {
+    return 'Invalid workspace_id format'
+  }
+  return null
+}
+
+// ============================================
 // Helper Functions
 // ============================================
 export function validateBody<T>(schema: z.ZodSchema<T>, body: unknown): { success: true; data: T } | { success: false; error: z.ZodError } {
@@ -165,5 +251,5 @@ export function validateQuery<T>(schema: z.ZodSchema<T>, query: Record<string, s
 }
 
 export function formatZodError(error: z.ZodError): string {
-  return error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
+  return error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
 }

@@ -21,10 +21,11 @@ export async function withAuth(
       }
 
       return await handler(request, { userId: user.id })
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('API error:', error)
+      const message = error instanceof Error ? error.message : 'Internal server error'
       return NextResponse.json(
-        { error: 'Internal server error' },
+        { error: message },
         { status: 500 }
       )
     }
@@ -60,7 +61,7 @@ export async function withWorkspaceAuth(
         .select('role')
         .eq('workspace_id', workspaceId)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
       if (!membership) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -71,23 +72,24 @@ export async function withWorkspaceAuth(
         workspaceId,
         membership,
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('API error:', error)
+      const message = error instanceof Error ? error.message : 'Internal server error'
       return NextResponse.json(
-        { error: 'Internal server error' },
+        { error: message },
         { status: 500 }
       )
     }
   }
 }
 
-export function createErrorResponse(message: string, status: number = 400, details?: any) {
+export function createErrorResponse(message: string, status: number = 400, details?: Record<string, unknown>) {
   return NextResponse.json(
     { error: message, ...(details && { details }) },
     { status }
   )
 }
 
-export function createSuccessResponse(data: any, status: number = 200) {
+export function createSuccessResponse(data: unknown, status: number = 200) {
   return NextResponse.json(data, { status })
 }

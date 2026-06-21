@@ -1,10 +1,10 @@
 import {
   validateWorkspaceId,
-  validateDateRange,
   sanitizeString,
-  validatePagination,
-  validateReportType,
-  validateReportFormat,
+  uuidSchema,
+  dateRangeSchema,
+  paginationSchema,
+  createReportSchema,
 } from '../validation'
 
 describe('validation', () => {
@@ -12,63 +12,97 @@ describe('validation', () => {
     it('accepts valid UUID', () => {
       expect(validateWorkspaceId('550e8400-e29b-41d4-a716-446655440000')).toBeNull()
     })
-    it('rejects non-string', () => {
-      expect(validateWorkspaceId(123)).toBe('workspace_id must be a string')
-    })
     it('rejects invalid UUID', () => {
-      expect(validateWorkspaceId('not-a-uuid')).toBe('workspace_id must be a valid UUID')
+      expect(validateWorkspaceId('not-a-uuid')).toBe('Invalid workspace_id format')
     })
-  })
-
-  describe('validateDateRange', () => {
-    it('accepts valid range', () => {
-      expect(validateDateRange('2026-01-01', '2026-06-21')).toBeNull()
-    })
-    it('rejects invalid start date', () => {
-      expect(validateDateRange('invalid', '2026-06-21')).toBe('Invalid start_date format')
-    })
-    it('rejects start after end', () => {
-      expect(validateDateRange('2026-06-21', '2026-01-01')).toBe('start_date must be before end_date')
-    })
-    it('rejects future date', () => {
-      const future = new Date(Date.now() + 86400000 * 365).toISOString().split('T')[0]
-      expect(validateDateRange(future, undefined)).toBe('start_date cannot be in the future')
+    it('rejects number passed as any', () => {
+      expect(validateWorkspaceId(123 as unknown as string)).toBe('Invalid workspace_id format')
     })
   })
 
   describe('sanitizeString', () => {
-    it('trims and truncates', () => {
-      expect(sanitizeString('  hello  ', 5)).toBe('hello')
+    it('trims whitespace', () => {
+      expect(sanitizeString('  hello  ')).toBe('hello')
     })
-    it('returns null for non-string', () => {
-      expect(sanitizeString(123)).toBeNull()
+    it('removes XSS characters', () => {
+      expect(sanitizeString('<script>alert(1)</script>')).toBe('scriptalert(1)/script')
     })
-  })
-
-  describe('validatePagination', () => {
-    it('returns defaults', () => {
-      expect(validatePagination()).toEqual({ page: 1, limit: 20 })
-    })
-    it('clamps max values', () => {
-      expect(validatePagination(2000, 500)).toEqual({ page: 1000, limit: 100 })
+    it('removes control characters', () => {
+      expect(sanitizeString('hello\x00world')).toBe('helloworld')
     })
   })
 
-  describe('validateReportType', () => {
-    it('accepts valid type', () => {
-      expect(validateReportType('campaign_summary')).toBeNull()
+  describe('uuidSchema', () => {
+    it('accepts valid UUID', () => {
+      const result = uuidSchema.safeParse('550e8400-e29b-41d4-a716-446655440000')
+      expect(result.success).toBe(true)
     })
-    it('rejects invalid type', () => {
-      expect(validateReportType('invalid')).toContain('campaign_summary')
+    it('rejects invalid UUID', () => {
+      const result = uuidSchema.safeParse('not-a-uuid')
+      expect(result.success).toBe(false)
     })
   })
 
-  describe('validateReportFormat', () => {
-    it('accepts csv', () => {
-      expect(validateReportFormat('csv')).toBeNull()
+  describe('dateRangeSchema', () => {
+    it('accepts valid date range', () => {
+      const result = dateRangeSchema.safeParse({
+        start_date: '2026-01-01',
+        end_date: '2026-06-21'
+      })
+      expect(result.success).toBe(true)
+    })
+    it('accepts partial date range', () => {
+      const result = dateRangeSchema.safeParse({ start_date: '2026-01-01' })
+      expect(result.success).toBe(true)
+    })
+    it('rejects invalid date format', () => {
+      const result = dateRangeSchema.safeParse({ start_date: 'invalid' })
+      expect(result.success).toBe(false)
+    })
+  })
+
+  describe('paginationSchema', () => {
+    it('returns defaults for empty input', () => {
+      const result = paginationSchema.parse({})
+      expect(result).toEqual({ page: 1, limit: 25 })
+    })
+    it('rejects limit exceeding max', () => {
+      const result = paginationSchema.safeParse({ limit: 500 })
+      expect(result.success).toBe(false)
+    })
+    it('accepts valid pagination', () => {
+      const result = paginationSchema.parse({ page: 2, limit: 50 })
+      expect(result).toEqual({ page: 2, limit: 50 })
+    })
+  })
+
+  describe('createReportSchema', () => {
+    it('accepts valid report params', () => {
+      const result = createReportSchema.safeParse({
+        workspace_id: '550e8400-e29b-41d4-a716-446655440000',
+        report_type: 'campaign_summary',
+        format: 'csv',
+        title: 'Test Report'
+      })
+      expect(result.success).toBe(true)
+    })
+    it('rejects invalid report type', () => {
+      const result = createReportSchema.safeParse({
+        workspace_id: '550e8400-e29b-41d4-a716-446655440000',
+        report_type: 'invalid',
+        format: 'csv',
+        title: 'Test Report'
+      })
+      expect(result.success).toBe(false)
     })
     it('rejects invalid format', () => {
-      expect(validateReportFormat('xml')).toContain('csv')
+      const result = createReportSchema.safeParse({
+        workspace_id: '550e8400-e29b-41d4-a716-446655440000',
+        report_type: 'campaign_summary',
+        format: 'xml',
+        title: 'Test Report'
+      })
+      expect(result.success).toBe(false)
     })
   })
 })

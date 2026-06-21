@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { processChatQuery } from '@/lib/ai-chat'
+import { chatRequestSchema, validateBody, formatZodError, sanitizeString } from '@/lib/validation'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -12,11 +13,17 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { query, workspace_id } = body
+  const validation = validateBody(chatRequestSchema, body)
 
-  if (!query || !workspace_id) {
-    return NextResponse.json({ error: 'query and workspace_id are required' }, { status: 400 })
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: formatZodError(validation.error) },
+      { status: 400 }
+    )
   }
+
+  const { query, workspace_id } = validation.data
+  const sanitizedQuery = sanitizeString(query)
 
   // Verify access
   const { data: membership } = await supabase
@@ -24,7 +31,7 @@ export async function POST(request: Request) {
     .select('role')
     .eq('workspace_id', workspace_id)
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (!membership) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -71,12 +78,29 @@ export async function POST(request: Request) {
     .order('date', { ascending: true })
 
   // Aggregate insights by campaign
-  const insightMap: Record<string, any> = {}
-  const timeSeries: any[] = []
+  interface CampaignInsights {
+    impressions: number
+    clicks: number
+    spend: number
+    conversions: number
+    purchase_value: number
+    reach: number
+  }
+  interface TimeSeriesPoint {
+    date: string
+    spend: number
+    revenue: number
+    purchase_value: number
+    clicks: number
+    impressions: number
+    conversions: number
+  }
+  const insightMap: Record<string, CampaignInsights> = {}
+  const timeSeries: TimeSeriesPoint[] = []
 
   if (insightsData) {
     // Aggregate by campaign for totals
-    insightsData.forEach((insight: any) => {
+    insightsData.forEach((insight) => {
       const key = insight.entity_id_meta
       if (!insightMap[key]) {
         insightMap[key] = {
@@ -97,8 +121,8 @@ export async function POST(request: Request) {
     })
 
     // Aggregate by date for time series
-    const byDate: Record<string, any> = {}
-    insightsData.forEach((insight: any) => {
+    const byDate: Record<string, TimeSeriesPoint> = {}
+    insightsData.forEach((insight) => {
       const date = insight.date
       if (!byDate[date]) {
         byDate[date] = { date, spend: 0, revenue: 0, purchase_value: 0, clicks: 0, impressions: 0, conversions: 0 }
@@ -110,13 +134,13 @@ export async function POST(request: Request) {
       byDate[date].impressions += insight.impressions || 0
       byDate[date].conversions += insight.conversions || 0
     })
-    timeSeries.push(...Object.values(byDate).sort((a: any, b: any) =>
+    timeSeries.push(...Object.values(byDate).sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     ))
   }
 
   // Process query
-  const result = processChatQuery(query, {
+  const result = processChatQuery(sanitizedQuery, {
     campaigns,
     insights: insightMap,
     timeSeries,

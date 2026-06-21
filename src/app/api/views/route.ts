@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { createViewRequestSchema, validateBody, formatZodError, uuidSchema, sanitizeString } from '@/lib/validation'
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -18,13 +19,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'workspace_id is required' }, { status: 400 })
   }
 
+  const uuidValidation = uuidSchema.safeParse(workspaceId)
+  if (!uuidValidation.success) {
+    return NextResponse.json({ error: 'Invalid workspace_id format' }, { status: 400 })
+  }
+
   // Verify access
   const { data: membership } = await supabase
     .from('workspace_members')
     .select('role')
     .eq('workspace_id', workspaceId)
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (!membership) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -60,7 +66,17 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { workspace_id, name, view_type, columns, filters, sort_by, sort_order, is_default } = body
+  const validation = validateBody(createViewRequestSchema, body)
+
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: formatZodError(validation.error) },
+      { status: 400 }
+    )
+  }
+
+  const { workspace_id, name, view_type, columns, filters, sort_by, sort_order, is_default } = validation.data
+  const sanitizedName = sanitizeString(name)
 
   // Verify access
   const { data: membership } = await supabase
@@ -68,7 +84,7 @@ export async function POST(request: Request) {
     .select('role')
     .eq('workspace_id', workspace_id)
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (!membership) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -79,13 +95,13 @@ export async function POST(request: Request) {
     .insert({
       workspace_id,
       user_id: user.id,
-      name,
-      view_type: view_type || 'campaigns',
-      columns: columns || ['name', 'status', 'budget', 'spent', 'impressions', 'clicks', 'ctr', 'cpc', 'conversions'],
-      filters: filters || {},
-      sort_by: sort_by || 'name',
-      sort_order: sort_order || 'asc',
-      is_default: is_default || false
+      name: sanitizedName,
+      view_type,
+      columns,
+      filters,
+      sort_by,
+      sort_order,
+      is_default
     })
     .select()
     .single()
