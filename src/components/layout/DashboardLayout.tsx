@@ -8,8 +8,16 @@ import { useState } from 'react'
 import { LayoutDashboard, Megaphone, ChartBar as BarChart3, Settings, User, LogOut, Menu, X, Building2, ChevronDown, Plus, Sparkles, Activity, TrendingUp, ChartLine as LineChart, Bell, MessageSquare, FileText, Search } from 'lucide-react'
 import { NotificationBell } from './NotificationBell'
 import { cn } from '@/lib/design-system'
+import type { LucideIcon } from 'lucide-react'
 
-const navigation = [
+type NavigationItem = {
+  name: string
+  href: string
+  icon: LucideIcon
+  description: string
+}
+
+const navigation: NavigationItem[] = [
   { 
     name: 'Overview', 
     href: '/dashboard', 
@@ -324,7 +332,7 @@ function MobileSidebarContent({
   searchQuery,
   setSearchQuery,
 }: {
-  navigation: typeof navigation
+  navigation: NavigationItem[]
   pathname: string
   onClose: () => void
   searchQuery: string

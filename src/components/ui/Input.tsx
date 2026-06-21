@@ -47,9 +47,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               error
                 ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
                 : 'border-slate-700 focus:border-blue-500 focus:ring-blue-500/20',
-              icon && iconPosition === 'left' && 'pl-10',
-              icon && iconPosition === 'right' && 'pr-10',
-              props.disabled && 'opacity-50 cursor-not-allowed',
+              icon && iconPosition === 'left' ? 'pl-10' : '',
+              icon && iconPosition === 'right' ? 'pr-10' : '',
+              props.disabled ? 'opacity-50 cursor-not-allowed' : '',
               className
             )}
             {...props}
