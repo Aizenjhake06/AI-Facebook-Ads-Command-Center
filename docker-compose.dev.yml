@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # Main Application (Development)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+  # Redis for job queue and rate limiting
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Sync Worker
+  worker-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run worker:sync
+    restart: on-failure
+
+  # Alert Worker
+  worker-alerts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run worker:alerts
+    restart: on-failure
+
+  # Report Worker
+  worker-reports:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run worker:reports
+    restart: on-failure
+
+  # Notification Worker
+  worker-notifications:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+      - app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run worker:notifications
+    restart: on-failure
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+    name: adpilot-dev-network
