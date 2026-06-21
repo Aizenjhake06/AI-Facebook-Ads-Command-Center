@@ -62,5 +62,5 @@ export async function GET(request: Request) {
   oauthUrl.searchParams.set('state', state)
   oauthUrl.searchParams.set('response_type', 'code')
 
-  return NextResponse.json({ url: oauthUrl.toString() })
+  return NextResponse.json({ authUrl: oauthUrl.toString() })
 }

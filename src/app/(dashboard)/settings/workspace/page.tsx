@@ -142,7 +142,7 @@ export default function WorkspaceSettingsPage() {
       localStorage.setItem('meta_oauth_workspace_id', currentWorkspace.id)
 
       // Get OAuth URL from our API
-      const response = await fetch('/api/meta/connect')
+      const response = await fetch(`/api/meta/connect?workspace_id=${currentWorkspace.id}`)
       const data = await response.json()
 
       if (!response.ok) {
