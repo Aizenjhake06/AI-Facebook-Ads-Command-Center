@@ -253,11 +253,24 @@ export async function POST(request: Request) {
           if (adsetsData.data && adsetsData.data.length > 0) {
             // First, we need to map campaign_id (Meta ID) to campaign UUID
             const campaignMetaIds = [...new Set(adsetsData.data.map(a => a.campaign_id).filter(Boolean))]
+            console.log(`Ad sets need campaigns:`, {
+              accountUUID: account.uuid,
+              accountMetaId: account.metaId,
+              campaignMetaIds: campaignMetaIds.slice(0, 5), // First 5 IDs
+              totalAdsets: adsetsData.data.length
+            })
+            
             const { data: campaignMappings } = await supabase
               .from('meta_campaigns')
               .select('id, campaign_id')
               .eq('ad_account_id', account.uuid)
               .in('campaign_id', campaignMetaIds)
+            
+            console.log(`Campaign mappings found:`, {
+              found: campaignMappings?.length || 0,
+              needed: campaignMetaIds.length,
+              sample: campaignMappings?.slice(0, 3)
+            })
             
             const campaignMap = new Map(campaignMappings?.map(c => [c.campaign_id, c.id]) || [])
             
@@ -282,6 +295,13 @@ export async function POST(request: Request) {
                 end_time: adset.end_time,
                 last_synced_at: new Date().toISOString(),
               }))
+            
+            console.log(`Ad sets filtering result:`, {
+              raw: adsetsData.data.length,
+              afterFilter: adsetsToUpsert.length,
+              dropped: adsetsData.data.length - adsetsToUpsert.length,
+              reason: adsetsToUpsert.length === 0 ? 'No matching campaigns found' : null
+            })
             
             if (adsetsToUpsert.length > 0) {
               await supabase
