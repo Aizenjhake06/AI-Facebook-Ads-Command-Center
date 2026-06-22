@@ -68,7 +68,56 @@ export async function POST(request: Request) {
   const metaClient = createMetaClient(accessToken)
 
   try {
-    let adAccountIds: { uuid: string; metaId: string }[] = []
+    // ========================================================================
+    // STEP 1: Sync Business Managers (if full sync)
+    // ========================================================================
+    let businessManagers: any[] = []
+    
+    if (!entityType || entityType === 'all' || entityType === 'business_managers') {
+      try {
+        console.log('Fetching business managers for connection:', connectionId)
+        const businessesData = await metaClient.request<{ data: any[] }>('/me/businesses', {
+          params: {
+            fields: 'id,name,profile_picture_uri,verification_status'
+          }
+        })
+
+        console.log(`Found ${businessesData.data?.length || 0} business managers`)
+        
+        if (businessesData.data && businessesData.data.length > 0) {
+          businessManagers = businessesData.data
+          
+          const businessesToUpsert = businessesData.data.map(business => ({
+            meta_connection_id: connectionId,
+            business_manager_id: business.id,
+            name: business.name,
+            profile_picture_url: business.profile_picture_uri || null,
+            is_active: true,
+            last_synced_at: new Date().toISOString(),
+          }))
+          
+          const { error: bmError } = await supabase
+            .from('meta_business_managers')
+            .upsert(businessesToUpsert, {
+              onConflict: 'meta_connection_id,business_manager_id'
+            })
+          
+          if (bmError) {
+            console.error('Error syncing business managers:', bmError)
+          } else {
+            console.log(`✅ Synced ${businessManagers.length} business managers`)
+          }
+        }
+      } catch (bmSyncError: any) {
+        console.warn('Business manager sync failed (non-critical):', bmSyncError.message)
+        // Continue with ad accounts sync even if BM sync fails
+      }
+    }
+
+    // ========================================================================
+    // STEP 2: Sync Ad Accounts
+    // ========================================================================
+    let adAccountIds: { uuid: string; metaId: string; bmId: string | null }[] = []
     
     if (adAccountId) {
       // Look up the UUID for this specific ad account
@@ -83,29 +132,45 @@ export async function POST(request: Request) {
         adAccountIds = [{ uuid: account.id, metaId: account.ad_account_id }]
       }
     } else {
-      // Get all ad accounts using new client
+      // Get all ad accounts using new client with business manager info
       console.log('Fetching ad accounts for connection:', connectionId)
       const adAccountsData = await metaClient.request<{ data: any[] }>('/me/adaccounts', {
         params: {
-          fields: 'id,name,account_status,currency,timezone_name,amount_spent,balance'
+          fields: 'id,name,account_status,currency,timezone_name,amount_spent,balance,business'
         }
       })
 
       console.log(`Found ${adAccountsData.data?.length || 0} ad accounts`)
       
+      // Get BM UUID mappings
+      const { data: bmMappings } = await supabase
+        .from('meta_business_managers')
+        .select('id, business_manager_id')
+        .eq('meta_connection_id', connectionId)
+      
+      const bmMap = new Map(bmMappings?.map(bm => [bm.business_manager_id, bm.id]) || [])
+      
       // Save ad accounts to database (batch upsert) and get UUIDs
       if (adAccountsData.data && adAccountsData.data.length > 0) {
-        const accountsToUpsert = adAccountsData.data.map(account => ({
-          meta_connection_id: connectionId,
-          ad_account_id: account.id,
-          name: account.name,
-          account_status: account.account_status,
-          currency: account.currency || 'USD',
-          timezone_name: account.timezone_name,
-          amount_spent: account.amount_spent ? parseFloat(account.amount_spent) / 100 : 0,
-          balance: account.balance ? parseFloat(account.balance) / 100 : 0,
-          last_synced_at: new Date().toISOString(),
-        }))
+        const accountsToUpsert = adAccountsData.data.map(account => {
+          // Try to find business manager UUID
+          const businessManagerId = account.business?.id 
+            ? bmMap.get(account.business.id) || null
+            : null
+          
+          return {
+            meta_connection_id: connectionId,
+            ad_account_id: account.id,
+            name: account.name,
+            business_manager_id: businessManagerId,
+            account_status: account.account_status,
+            currency: account.currency || 'USD',
+            timezone_name: account.timezone_name,
+            amount_spent: account.amount_spent ? parseFloat(account.amount_spent) / 100 : 0,
+            balance: account.balance ? parseFloat(account.balance) / 100 : 0,
+            last_synced_at: new Date().toISOString(),
+          }
+        })
         
         const { data: upsertedAccounts } = await supabase
           .from('meta_ad_accounts')
