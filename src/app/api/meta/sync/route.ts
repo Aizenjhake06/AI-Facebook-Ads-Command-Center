@@ -123,13 +123,17 @@ export async function POST(request: Request) {
       // Look up the UUID for this specific ad account
       const { data: account } = await supabase
         .from('meta_ad_accounts')
-        .select('id, ad_account_id')
+        .select('id, ad_account_id, business_manager_id')
         .eq('meta_connection_id', connectionId)
         .eq('ad_account_id', adAccountId)
         .single()
       
       if (account) {
-        adAccountIds = [{ uuid: account.id, metaId: account.ad_account_id }]
+        adAccountIds = [{ 
+          uuid: account.id, 
+          metaId: account.ad_account_id,
+          bmId: account.business_manager_id || null
+        }]
       }
     } else {
       // Get all ad accounts using new client with business manager info
@@ -177,12 +181,13 @@ export async function POST(request: Request) {
           .upsert(accountsToUpsert, {
             onConflict: 'meta_connection_id,ad_account_id'
           })
-          .select('id, ad_account_id')
+          .select('id, ad_account_id, business_manager_id')
         
         if (upsertedAccounts) {
           adAccountIds = upsertedAccounts.map(acc => ({
             uuid: acc.id,
-            metaId: acc.ad_account_id
+            metaId: acc.ad_account_id,
+            bmId: acc.business_manager_id
           }))
         }
       }

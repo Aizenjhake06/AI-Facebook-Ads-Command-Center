@@ -133,7 +133,7 @@ export function AdAccountFilterProvider({
     adAccounts,
     filteredAdAccounts,
     setSelectedBusinessManager,
-    setSelectedAdAccount,
+    setSelectedAdAccount: setSelectedAdAccountId,
     refreshData,
     loading,
     error
