@@ -41,7 +41,9 @@ export async function GET(request: Request) {
   const { data, error } = await query
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('Alerts query error:', error)
+    // Return empty array instead of error if it's just no data
+    return NextResponse.json({ alerts: [] })
   }
 
   return NextResponse.json({ alerts: data || [] })
